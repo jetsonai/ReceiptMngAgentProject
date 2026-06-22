@@ -1,0 +1,19 @@
+# --- 파이썬 & 환경 ---
+__pycache__/
+*.py[cod]
+venv/
+.env
+
+# --- PyTorch/ML 모델 및 데이터 ---
+*.pt
+*.pth
+*.tar
+data/
+datasets/
+
+# --- 빌드, 로그 및 OS ---
+build/
+*.egg-info/
+wandb/
+tensorboard/
+.DS_Store
