@@ -1,1 +1,1 @@
-# -ReceiptMngAgentProject
+# ReceiptMngAgentProject
