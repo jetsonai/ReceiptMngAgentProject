@@ -74,6 +74,34 @@ AI는 비정형 영수증 텍스트에서 다음 정보를 추출한다.
 | memo | 요약 메모 | 카페 지출 |
 
 ---
+class ReceiptAgentState(TypedDict):
+    messages: Annotated[list, add_messages]
+    
+    # 기획안 DB 속성 반영
+    id: str                  # 지출 항목 고유 식별자 [cite: 48, 50]
+    spent_at: str            # 지출 날짜 [cite: 51, 53]
+    merchant: str            # 상점명 또는 사용처 [cite: 54, 56]
+    amount: int              # 지출 총 금액 [cite: 57, 59]
+    payment_method: str      # 결제수단 [cite: 60, 62]
+    category: str            # 소비 카테고리 [cite: 63, 65]
+    memo: str                # 사용자 메모 또는 OCR 원문 요약 [cite: 66, 68]
+    source: str              # 입력 경로 ('image' 또는 'text') [cite: 69, 71]
+    budget_status: str       # 예산 평가 결과 ('정상' / '주의' / '초과') [cite: 72, 74]
+    notion_sync_status: str  # Notion 기록 결과 ('success' / 'failed' / 'skipped') [cite: 75, 77]
+    
+    # 🌟 요구사항에 맞게 변수명 수정 및 신규 필드 추가
+    addr: str                # 상점 주소 (변수명 address -> addr 변경) [cite: 45, 78, 79]
+    tel: str                 # 상점 전화번호 (TELL) [cite: 45, 80, 81]
+    reg_date: str            # 🌟 신규 추가: 등록일시 (REG_DATE) [cite: 45, 82, 83]
+    
+    # N분의 1 계산 고도화 필드
+    items: List[Dict[str, Any]] 
+    detected_people_count: int  
+    per_person_amount: int      
+    image_path: str          
+    ocr_raw_text: str        
+    rag_violation_report: str 
+---
 
 ### 3.3 지출 카테고리 분류
 AI는 영수증 내용을 기반으로 지출 카테고리를 분류한다.
