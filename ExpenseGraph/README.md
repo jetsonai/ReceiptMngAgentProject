@@ -25,7 +25,7 @@ conda activate ml_env
 
 # LangGraph, OpenAI, Streamlit 등 핵심 패키지 설치
 pip install langgraph langchain-core langchain-openai langchain-community langchain-text_splitters chroma4py
-pip install streamlit pillow python-dotenv
+pip install streamlit pillow python-dotenv fastapi
 
 ### 2. PyTorch 설치 (노트북 환경별 선택)
 허깅페이스 관련 라이브러리 의존성 해결을 위해 PyTorch 설치가 필수적입니다. 본인의 하드웨어 사양에 맞춰 한 가지만 선택하여 설치하세요.
@@ -44,30 +44,28 @@ pip install torch torchvision torchaudio --index-url [https://download.pytorch.o
 ### 환경 변수 세팅
 
 ```python
-...
+[System.Environment]::SetEnvironmentVariable("OPENAI_API_KEY", "sk-proj-hCCnUbeL...", "User")
 ```
 
-### 실행 방법
+### BackEnd 실행 방법
 
 ```python
 # 가상환경 상에서 실행
-streamlit run app_v4.py
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### FrontEnd 실행 방법
+
+```python
+# 가상환경 상에서 실행
+streamlit run app.py
 ```
 
 ### Streamlit GUI 사용 가이드
 
 Streamlit GUI 사용 가이드
+<img width="601" height="665" alt="image" src="https://github.com/user-attachments/assets/b4581965-8c9e-4192-8ad2-c147bbecf9da" />
 
-```python
-┌───────────────────────────────────────┬────────────────────────────────────-───┐
-│          📥 영수증 증빙 제출           │         📊 지능형 심사 결과 리포트      │
-│                                       │                                     -  │
-│ 1. [Drag and Drop 파일 업로드]         │   - LangGraph 노드 진행 단계 실시간 알림-│
-│ 2. 업로드 성공 시 원본 이미지 프리뷰     │   - 🎯 최종 판정 결과 (정상/주의 상태코드)│
-│ 3. [🔍 영수증 자동 분석 가동] 버튼 클릭 │   - 📜 AI 감사관 상세 검토 리포트        │
-│                                       │   - 🔢 파싱된 정형 데이터 내역 (JSON) -- │
-└───────────────────────────────────────┴──────────────────────────────────────-─┘
-```
 
 영수증 파일 업로드: 좌측 영역의 Browse files 버튼을 눌러 준비된 영수증 이미지(PNG, JPG, JPEG)를 업로드합니다.
 
