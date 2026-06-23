@@ -44,7 +44,7 @@ pip install torch torchvision torchaudio --index-url [https://download.pytorch.o
 ### 환경 변수 세팅
 
 ```python
-...
+[System.Environment]::SetEnvironmentVariable("OPENAI_API_KEY", "sk-proj-hCCnUbeL...", "User")
 ```
 
 ### 실행 방법
