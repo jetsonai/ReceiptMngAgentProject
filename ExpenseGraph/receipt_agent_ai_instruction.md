@@ -628,3 +628,12 @@ MVP 이후 다음 기능을 추가할 수 있다.
 6. `/api/receipts/analyze` API를 더미 응답으로 먼저 구현한다.
 7. Streamlit에서 FastAPI API를 호출하는 기본 화면을 만든다.
 
+## 17. 카테고리 분류 RAG 생성
+```sh
+# rag db 생성ㄷ
+cd C:\gitwork\ReceiptMngAgentProject\backend
+python -m app.services.rag_build --build
+
+# rag 테스트
+python -m app.services.rag_build --query "서울역 주차장 주차비 5000"
+```
