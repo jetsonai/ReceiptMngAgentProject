@@ -25,7 +25,7 @@ conda activate ml_env
 
 # LangGraph, OpenAI, Streamlit 등 핵심 패키지 설치
 pip install langgraph langchain-core langchain-openai langchain-community langchain-text_splitters chroma4py
-pip install streamlit pillow python-dotenv
+pip install streamlit pillow python-dotenv fastapi
 
 ### 2. PyTorch 설치 (노트북 환경별 선택)
 허깅페이스 관련 라이브러리 의존성 해결을 위해 PyTorch 설치가 필수적입니다. 본인의 하드웨어 사양에 맞춰 한 가지만 선택하여 설치하세요.
@@ -47,11 +47,18 @@ pip install torch torchvision torchaudio --index-url [https://download.pytorch.o
 [System.Environment]::SetEnvironmentVariable("OPENAI_API_KEY", "sk-proj-hCCnUbeL...", "User")
 ```
 
-### 실행 방법
+### BackEnd 실행 방법
 
 ```python
 # 가상환경 상에서 실행
-streamlit run app_v4.py
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### FrontEnd 실행 방법
+
+```python
+# 가상환경 상에서 실행
+streamlit run app.py
 ```
 
 ### Streamlit GUI 사용 가이드
