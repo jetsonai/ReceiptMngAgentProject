@@ -65,7 +65,7 @@ $env:AWS_MYSQL_DATABASE="db"
     category: str            # 소비 카테고리 
     memo: str                # 사용자 메모 또는 OCR 원문 요약 
     source: str              # 입력 경로 ('image' 또는 'text') 
-    budget_status: str       # 예산 평가 결과 ('정상' / '주의' / '초과') 
+    budget_status: str       # 예산 평가 결과 ('정상' / '주의' / '경고' / '초과') 
     notion_sync_status: str  # Notion 기록 결과 ('success' / 'failed' / 'skipped') 
     
     # 🌟 요구사항에 맞게 변수명 수정 및 신규 필드 추가
