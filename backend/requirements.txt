@@ -1,3 +1,7 @@
 chromadb
 langchain-openai
+pandas
+python-dotenv
+pymysql
+streamlit
 pytest

@@ -100,6 +100,13 @@ python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 streamlit run app.py
 ```
 
+### 관리자 페이지 실행 방법
+
+```bash
+# DB에 저장된 영수증/지출 내역 조회
+streamlit run admin_app.py
+```
+
 ### Streamlit GUI 사용 가이드
 
 Streamlit GUI 사용 가이드
