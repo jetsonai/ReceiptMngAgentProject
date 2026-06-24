@@ -13,6 +13,7 @@ def _status_prefix(ok: bool) -> str:
 
 
 def check_openai(api_key: str) -> tuple[bool, str]:
+    # 모델 목록 조회로 API key가 실제로 인증되는지 확인한다.
     try:
         response = httpx.get(
             "https://api.openai.com/v1/models",
@@ -29,6 +30,7 @@ def check_openai(api_key: str) -> tuple[bool, str]:
 
 
 def check_notion(token: str) -> tuple[bool, str]:
+    # 현재 봇 사용자 조회로 Notion integration token이 유효한지 확인한다.
     try:
         response = httpx.get(
             "https://api.notion.com/v1/users/me",
@@ -48,6 +50,7 @@ def check_notion(token: str) -> tuple[bool, str]:
 
 
 def main() -> int:
+    # 회의 데모 전, 필요한 키와 database_id 추출 여부를 터미널에서 빠르게 점검한다.
     env_path = load_project_env()
     print(f".env loaded: {env_path if env_path else 'not found'}")
 

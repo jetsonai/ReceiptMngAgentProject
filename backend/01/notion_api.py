@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from env_loader import load_project_env
 from env_healthcheck import check_notion, check_openai
 from notion_config import load_runtime_config
-from notion_constants import STATUS_PENDING
+from notion_constants import PAYMENT_METHOD_CARD, STATUS_PENDING
 from notion_record_agent import ExpenseRecord, record_expense_to_notion
 
 load_project_env()
@@ -17,6 +17,7 @@ app = FastAPI(title="Notion Record Health API", version="1.0.0")
 
 
 class KeyHealthResponse(BaseModel):
+    # /health/keys 응답: 키 존재 여부와 실제 API 인증 결과를 함께 반환한다.
     ok: bool
     env_path: str | None = None
     openai: dict[str, Any]
@@ -24,6 +25,7 @@ class KeyHealthResponse(BaseModel):
 
 
 class NotionWriteResponse(BaseModel):
+    # /notion/test-record 응답: Notion 생성 결과와 실제 전송 payload를 확인용으로 반환한다.
     ok: bool
     skipped: bool = False
     page_id: str | None = None
@@ -34,12 +36,13 @@ class NotionWriteResponse(BaseModel):
 
 
 def _sample_record() -> ExpenseRecord:
+    # Swagger 데모에서 요청 본문 없이 바로 실행할 수 있는 샘플 지출 데이터.
     return ExpenseRecord(
         id="EXP-TEST-0001",
         user_id="api-test",
         amount=12500,
         category="식비",
-        payment_method="신용카드",
+        payment_method=PAYMENT_METHOD_CARD,
         merchant="편의점",
         memo="FastAPI 테스트 기록",
         source="api",
@@ -52,6 +55,7 @@ def _sample_record() -> ExpenseRecord:
 
 @app.get("/health/keys", response_model=KeyHealthResponse)
 def health_keys() -> KeyHealthResponse:
+    # OpenAI/Notion 키가 있는지와 실제 인증되는지를 한 번에 점검한다.
     config = load_runtime_config()
     env_path = load_project_env()
 
@@ -80,6 +84,7 @@ def health_keys() -> KeyHealthResponse:
 
 @app.post("/notion/test-record", response_model=NotionWriteResponse)
 def notion_test_record(record: ExpenseRecord | None = None) -> NotionWriteResponse:
+    # 요청 body가 있으면 그 값으로, 없으면 샘플 값으로 Notion 기록을 테스트한다.
     config = load_runtime_config()
     if not config.notion_database_id:
         raise HTTPException(

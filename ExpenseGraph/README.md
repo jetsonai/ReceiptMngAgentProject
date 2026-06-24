@@ -33,12 +33,13 @@ pip install streamlit pillow python-dotenv fastapi
 NVIDIA GPU(예: RTX 5070 등) 가속 환경 노트북:
 
 ```python
-pip install torch torchvision torchaudio --index-url [https://download.pytorch.org/whl/cu124](https://download.pytorch.org/whl/cu124)
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 ```
 일반 강의장 및 사무용 노트북 (CPU 전용 환경):
 
 ```python
-pip install torch torchvision torchaudio --index-url [https://download.pytorch.org/whl/cpu](https://download.pytorch.org/whl/cpu)
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+
 ```
 
 ### 환경 변수 세팅
@@ -60,8 +61,8 @@ $env:AWS_MYSQL_DATABASE="db"
 
 ```powershell
 # 가상환경 상에서 실행
-cd ..\backend\app
-python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+cd ..\backend
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ### FrontEnd 실행 방법

@@ -8,10 +8,11 @@ from notion_models import ExpenseRecord, NotionGraphState, NotionWriteResult
 from notion_payload import build_notion_payload
 
 load_project_env()
-from notion_constants import STATUS_PENDING
+from notion_constants import PAYMENT_METHOD_CARD, STATUS_PENDING
 
 
 def build_graph():
+    # prepare에서 Notion payload를 만들고, write에서 실제 기록 또는 dry-run을 수행한다.
     graph = StateGraph(NotionGraphState)
     graph.add_node("prepare", build_notion_payload)
     graph.add_node("write", write_to_notion)
@@ -32,12 +33,13 @@ def record_expense_to_notion(record: ExpenseRecord) -> NotionWriteResult:
 
 
 if __name__ == "__main__":
+    # 단독 실행 시 Notion 기록 흐름을 빠르게 확인하기 위한 샘플 데이터.
     sample = ExpenseRecord(
         id="EXP-20260622-0001",
         user_id="demo-user",
         amount=12500,
         category="식비",
-        payment_method="카드",
+        payment_method=PAYMENT_METHOD_CARD,
         merchant="편의점",
         memo="편의점 간식 지출이 많음",
         source="image_upload",

@@ -20,6 +20,7 @@ from notion_constants import (
 
 @dataclass(frozen=True)
 class RuntimeConfig:
+    # 실행 시점에 필요한 환경설정을 한 곳에서 넘기기 위한 읽기 전용 객체.
     openai_api_key: str | None
     openai_model: str
     notion_token: str | None
@@ -29,6 +30,7 @@ class RuntimeConfig:
 
 
 def _extract_database_id(value: str | None) -> str | None:
+    # Notion URL 또는 직접 입력된 문자열에서 32자리 database_id만 추출한다.
     if not value:
         return None
 
@@ -49,6 +51,7 @@ def _extract_database_id(value: str | None) -> str | None:
 
 
 def load_runtime_config() -> RuntimeConfig:
+    # .env를 반영한 뒤, 코드 전체에서 사용할 런타임 설정을 생성한다.
     load_project_env()
     notion_database_id = os.getenv(NOTION_DATABASE_ID_ENV)
     notion_database_url = os.getenv(NOTION_DATABASE_URL_ENV)
