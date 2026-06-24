@@ -19,9 +19,33 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from pathlib import Path
 from typing import Any, Dict
 
 import pymysql
+from dotenv import load_dotenv
+
+
+def _load_environment() -> None:
+    """Load .env from module and project root regardless of cwd."""
+    module_dir = Path(__file__).resolve().parent
+    candidates = [
+        module_dir / ".env",
+        module_dir.parent / ".env",
+        Path.cwd() / ".env",
+    ]
+
+    loaded = False
+    for dotenv_path in candidates:
+        if dotenv_path.exists():
+            load_dotenv(dotenv_path=dotenv_path, override=False)
+            loaded = True
+
+    if not loaded:
+        load_dotenv(override=False)
+
+
+_load_environment()
 
 
 def _build_config_from_env() -> Dict[str, Any]:

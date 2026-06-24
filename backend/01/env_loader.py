@@ -15,6 +15,7 @@ _ALIASES = {
 
 
 def _parse_env_file(path: Path) -> dict[str, str]:
+    # python-dotenv 없이도 단순한 KEY=VALUE 형식의 .env를 읽기 위한 최소 파서.
     values: dict[str, str] = {}
     for raw_line in path.read_text(encoding="utf-8").splitlines():
         line = raw_line.strip()
@@ -32,6 +33,7 @@ def _parse_env_file(path: Path) -> dict[str, str]:
 
 
 def load_project_env() -> Path | None:
+    # 01 폴더부터 상위 폴더까지 올라가며 가장 가까운 .env를 한 번만 로드한다.
     start_dir = Path(__file__).resolve().parent
     for directory in (start_dir, *start_dir.parents):
         env_path = directory / ".env"
@@ -41,6 +43,7 @@ def load_project_env() -> Path | None:
         values = _parse_env_file(env_path)
         for key, value in values.items():
             os.environ.setdefault(key, value)
+            # 팀원이 소문자 키로 작성해도 실제 환경변수명으로 인식되게 보정한다.
             alias = _ALIASES.get(key.lower())
             if alias:
                 os.environ.setdefault(alias, value)

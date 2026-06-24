@@ -33,12 +33,13 @@ pip install streamlit pillow python-dotenv fastapi
 NVIDIA GPU(예: RTX 5070 등) 가속 환경 노트북:
 
 ```python
-pip install torch torchvision torchaudio --index-url [https://download.pytorch.org/whl/cu124](https://download.pytorch.org/whl/cu124)
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
 ```
 일반 강의장 및 사무용 노트북 (CPU 전용 환경):
 
 ```python
-pip install torch torchvision torchaudio --index-url [https://download.pytorch.org/whl/cpu](https://download.pytorch.org/whl/cpu)
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+
 ```
 
 ### 환경 변수 세팅
@@ -55,13 +56,30 @@ $env:AWS_MYSQL_USER="root"
 $env:AWS_MYSQL_PASSWORD="admin"
 $env:AWS_MYSQL_DATABASE="db"
 ```
-
+## 필드 설명
+    # 기획안 DB 속성 반영
+    id: str                  # 지출 항목 고유 식별자  
+    spent_at: str            # 지출 날짜 
+    merchant: str            # 상점명 또는 사용처 
+    amount: int              # 지출 총 금액 
+    payment_method: str      # 결제수단 
+    category: str            # 소비 카테고리 
+    memo: str                # 사용자 메모 또는 OCR 원문 요약 
+    source: str              # 입력 경로 ('image' 또는 'text') 
+    budget_status: str       # 예산 평가 결과 ('정상' / '주의' / '경고' / '초과') 
+    notion_sync_status: str  # Notion 기록 결과 ('success' / 'failed' / 'skipped') 
+    
+    # 🌟 요구사항에 맞게 변수명 수정 및 신규 필드 추가
+    addr: str                # 상점 주소 (변수명 address -> addr 변경) 
+    tel: str                 # 상점 전화번호 (TELL) 
+    reg_date: str            # 🌟 신규 추가: 등록일시 (REG_DATE) 
+    
 ### BackEnd 실행 방법
 
 ```powershell
 # 가상환경 상에서 실행
-cd ..\backend\app
-python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+cd ..\backend
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ### FrontEnd 실행 방법

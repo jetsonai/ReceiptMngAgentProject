@@ -12,11 +12,13 @@ except Exception:  # pragma: no cover
 
 
 def build_title(record: ExpenseRecord) -> str:
+    # Notion 페이지 제목으로 쓸 한 줄 요약.
     merchant = f" {record.merchant}" if record.merchant else ""
     return f"{record.spent_at.isoformat()} {record.category}{merchant} {record.amount:,.0f}원"
 
 
 def polish_body_with_llm(record: ExpenseRecord, fallback_body: str) -> str:
+    # OpenAI 설정이 있으면 본문을 자연스럽게 다듬고, 없으면 기본 본문을 그대로 쓴다.
     config = load_runtime_config()
     if not config.openai_api_key or ChatPromptTemplate is None or ChatOpenAI is None:
         return fallback_body
@@ -49,6 +51,7 @@ def polish_body_with_llm(record: ExpenseRecord, fallback_body: str) -> str:
 
 
 def build_notion_body(record: ExpenseRecord) -> str:
+    # LLM을 쓰지 않아도 페이지 본문이 비지 않도록 기본 템플릿을 먼저 만든다.
     fallback_body = (
         f"## 이번 주 소비 패턴 분석 및 절약 팁\n\n"
         f"- 소비 카테고리: {record.category}\n"

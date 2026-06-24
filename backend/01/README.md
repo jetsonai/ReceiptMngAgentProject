@@ -7,8 +7,7 @@
 - `01/notion_record_agent.py`
   - OCR/분석/예산평가 결과를 받아 Notion 페이지를 생성한다.
   - LangGraph로 `prepare -> write` 흐름을 구성한다.
-  - `OPENAI_API_KEY`가 있으면 본문을 LangChain으로 다듬고, 없으면 기본 본문을 사용한다.
-  - `NOTION_TOKEN`과 `NOTION_DATABASE_ID`가 없으면 dry-run으로 끝난다.
+  - `NOTION_TOKEN`과 `NOTION_DATABASE_ID`, `OPENAI_API_KEY`는 .env 파일에서 읽는다. 
   - 내부 구현은 `notion_constants.py`, `notion_config.py`, `notion_models.py`, `notion_text.py`, `notion_payload.py`, `notion_client.py`로 분리했다.
 
 ## 입력 데이터 구조
@@ -40,8 +39,8 @@
 | `지출날짜` | `date` | 지출일 |
 | `상점명` | `rich_text` | 가맹점 |
 | `지출 금액` | `number` | 지출금액 |
-| `결제수단` | `select` | `기타`, `현금`, `신용카드` |
-| `소비 카테고리` | `select` | `기타`, `의료`, `쇼핑`, `생활`, `교통`, `식비` |
+| `결제수단` | `select` | `신영카드`, `현금영수증` |
+| `소비 카테고리` | `select` | `식비`, `교통`, `숙박`, `일비`, `항공`, `배송비`, `회의비`, `기타` |
 | `OCR 원문` | `rich_text` | 원문 저장 |
 | `OCR 원문 요약` | `rich_text` | 요약 저장 |
 | `입력 경로` | `rich_text` | 예: `api`, `image_upload` |
@@ -101,7 +100,21 @@ uvicorn notion_api:app --reload --app-dir 01
 4. `POST /notion/test-record` 실행해서 실제 Notion 기록 생성 확인
 5. Notion 페이지가 생성된 결과를 화면으로 확인
 
-## 발표 순서
+##  순서
+
+notion_record_agent.py   # graph + 실행 진입점
+notion_service.py        # payload 생성 + Notion 호출
+notion_record_agent.py   # 전체 흐름 조립: prepare -> write
+notion_payload.py        # ExpenseRecord를 Notion API payload로 변환
+notion_client.py         # Notion API에 실제 요청 보내기
+notion_text.py           # Notion 본문/제목 만들기
+notion_models.py         # 데이터 모델 구조 정의
+notion_constants.py      # Notion 속성명, 상태값 상수
+notion_config.py         # 환경변수 읽기
+env_loader.py            # .env 파일 찾고 로드
+env_healthcheck.py       # 키가 정상인지 점검
+notion_api.py            # FastAPI 데모용 API
+
 
 1. 이 저장소가 담당하는 범위 설명
    - 지출 파이프라인 중 `Notion 기록`만 담당
@@ -132,11 +145,38 @@ uvicorn notion_api:app --reload --app-dir 01
 
 - OCR 결과와 `ExpenseRecord` 자동 매핑
 - 예산평가결과를 `예산평가결과`에 연결
-- 노션기록결과를 `대기/성공/실패`로 더 세분화
-- Streamlit 테스트 화면 추가
+- 노션기록결과를 `대기/성공 `로 더 세분화
 - 팀 전체 파이프라인과 인터페이스 통합
 
-## 비고
+## 노션에서 데이터베이스 id 찾는 방법
+Notion에서 `NOTION_DATABASE_URL` 또는 database id 찾는 방법은 이렇게 하면 돼요.
 
-- 다른 팀원이 맡은 OCR, 텍스트 분석, 카테고리 분류, 예산평가 코드는 여기에 넣지 않는다.
-- 이 파일은 Notion 기록 전용 문서다.
+1. Notion에서 지출 기록용 **데이터베이스 페이지**를 연다.
+2. 오른쪽 위 `공유` 또는 `Share` 버튼을 누른다.
+3. `링크 복사` / `Copy link`를 누른다.
+4. 복사된 URL을 `.env`의 `NOTION_DATABASE_URL=` 뒤에 그대로 붙여 넣는다.
+
+예시는 이런 형태예요.
+
+```env
+NOTION_DATABASE_URL=https://www.notion.so/workspace-name/abcdef1234567890abcdef1234567890?v=...
+```
+
+여기서 database id는 보통 URL 안의 **32자리 영문+숫자 조합**입니다.
+
+예를 들어 URL이 이렇다면:
+
+```text
+https://www.notion.so/myspace/Expense-DB-abcdef1234567890abcdef1234567890?v=123
+```
+
+database id는:
+
+```text
+abcdef1234567890abcdef1234567890
+```
+
+현재 코드에서는 `NOTION_DATABASE_URL`을 넣으면 자동으로 database id를 뽑도록 되어 있어서, 직접 `NOTION_DATABASE_ID`를 찾지 않아도 됩니다. 가장 쉬운 방법은 **데이터베이스 링크 전체를 `NOTION_DATABASE_URL`에 넣는 것**이에요.
+
+그리고 중요한 것 하나:  
+Notion integration을 만든 뒤에, 해당 데이터베이스 페이지에서 `공유` 버튼을 눌러 **내 integration을 초대/연결**해야 합니다. 이걸 안 하면 database id를 넣어도 API가 접근을 못 해요.
