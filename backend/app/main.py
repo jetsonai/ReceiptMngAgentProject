@@ -250,4 +250,4 @@ async def analyze_receipt_api(file: UploadFile = File(...)):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main.py:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("app.main.py:app", host="0.0.0.0", port=8000, reload=True)

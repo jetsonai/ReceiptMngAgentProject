@@ -54,7 +54,7 @@ pip install torch torchvision torchaudio --index-url [https://download.pytorch.o
 python -m app.services.rag_build --build
 
 # 가상환경 상에서 실행
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ### FrontEnd 실행 방법
