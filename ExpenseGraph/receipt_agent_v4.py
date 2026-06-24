@@ -18,6 +18,7 @@ from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from save_local_db import DEFAULT_DB_PATH, save_local_db
 
 # .env 파일로부터 환경 변수(OPENAI_API_KEY) 로드
 load_dotenv()
@@ -174,11 +175,11 @@ def analyze_expenditure_node(state: ReceiptAgentState):
           "reg_date": current_now,                      # 🌟 신규 추가: 가계부 등록 일시 저장 [cite: 45, 82, 83]
           "amount": total_amount,
           "payment_method": result.get("payment_method", ""),
-          "category": "식비/외근",
+                    "category": "식비/외근",
           "items": parsed_items,
           "detected_people_count": people_count,
           "per_person_amount": per_person,
-          "memo": f"Vision AI OCR 분석 / 총 {people_count}명 식사 (1인당 {per_person}원)"
+                    "memo": f"Vision AI OCR 분석 / 총 {people_count}명 식사 (1인당 {per_person}원)"
         }
     except Exception as e:
         return {"merchant": "파싱 실패", "amount": 0, "detected_people_count": 1, "per_person_amount": 0}
@@ -219,7 +220,27 @@ def evaluate_budget_node(state: ReceiptAgentState):
         status = "정상"
     return {"budget_status": status}
 
-def save_db_node(state: ReceiptAgentState): return {}
+def save_db_node(state: ReceiptAgentState):
+    user_id = state.get("user_id") or "default-user"
+    expense_data = {
+        "user_id": user_id,
+        "store_name": state.get("merchant") or "미상",
+        "purchased_at": state.get("spent_at") or datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "total_amount": int(state.get("amount") or 0),
+        "payment_method": state.get("payment_method") or "",
+        "category": state.get("category") or "기타",
+        "memo": state.get("memo") or "",
+        "raw_text": state.get("ocr_raw_text") or "",
+        "items": state.get("items") or [],
+    }
+
+    result = save_local_db(expense_data, db_path=DEFAULT_DB_PATH)
+    return {
+        "saved_local_db": result.get("saved_local_db", False),
+        "saved_expense_id": result.get("expense_id"),
+        "save_db_error": result.get("error", ""),
+    }
+
 def record_notion_node(state: ReceiptAgentState): return {"notion_sync_status": "success"}
 
 def route_after_budget(state: ReceiptAgentState) -> Literal["to_notion", "to_end"]:

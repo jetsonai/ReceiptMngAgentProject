@@ -17,7 +17,11 @@ from langgraph.checkpoint.memory import MemorySaver
 from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
 
-from app.services.rag_service import PolicyRagService
+try:
+    from app.services.rag_service import PolicyRagService
+except ModuleNotFoundError:
+    # Allow running from backend/app with `uvicorn main:app`.
+    from services.rag_service import PolicyRagService
 
 load_dotenv()
 
@@ -183,8 +187,56 @@ def evaluate_budget_node(state: ReceiptAgentState):
 
 # 기획서 요구사항에 의거한 DB / 노션 기록 스텁(로그 처리) 선언
 def save_db_node(state: ReceiptAgentState):
-    print(f"[SQLite DB 로그] Insert 성공 - 상점명: {state.get('merchant')}, 금액: {state.get('amount')}")
-    return {}
+    # backend/app에서 실행될 때를 대비해 프로젝트 루트를 경로에 추가
+    import sys
+    from pathlib import Path
+
+    project_root = Path(__file__).resolve().parents[2]
+    if str(project_root) not in sys.path:
+        sys.path.append(str(project_root))
+
+    try:
+        from ExpenseGraph.save_local_db import save_local_db, DEFAULT_DB_TARGET
+    except Exception as e:
+        print(f"[DB 로그] save_local_db import 실패: {e}")
+        return {"saved_local_db": False, "db_error": str(e)}
+
+    expense_data = {
+        "user_id": state.get("id", "api_user"),
+        "spent_at": state.get("spent_at"),
+        "merchant": state.get("merchant"),
+        "amount": state.get("amount", 0),
+        "payment_method": state.get("payment_method", ""),
+        "category": state.get("category", "미분류"),
+        "memo": state.get("memo", ""),
+        "source": state.get("source", "image"),
+        "budget_status": state.get("budget_status", "정상"),
+        "notion_sync_status": state.get("notion_sync_status", "pending"),
+        "addr": state.get("addr", ""),
+        "tel": state.get("tel", ""),
+        "reg_date": state.get("reg_date", datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+        "items": state.get("items", []),
+        "detected_people_count": state.get("detected_people_count", 1),
+        "per_person_amount": state.get("per_person_amount", 0),
+        "image_path": state.get("image_path", ""),
+        "raw_text": state.get("ocr_raw_text", ""),
+        "ocr_raw_text": state.get("ocr_raw_text", ""),
+        "rag_violation_report": state.get("rag_violation_report", ""),
+        "category_confidence": state.get("category_confidence", 0.0),
+        "category_reason": state.get("category_reason", ""),
+        "category_matched_rules": state.get("category_matched_rules", []),
+    }
+
+    db_target = os.getenv("DATABASE_URL", DEFAULT_DB_TARGET)
+    save_result = save_local_db(expense_data, db_path=db_target)
+    print(
+        f"[DB 로그] 저장결과={save_result.get('saved_local_db')} "
+        f"expense_id={save_result.get('expense_id')} "
+        f"target={db_target} "
+        f"상점명={expense_data.get('merchant')} 금액={expense_data.get('amount')}"
+    )
+
+    return {"db_save_result": save_result}
 
 def record_notion_node(state: ReceiptAgentState):
     print(f"[Notion API 로그] 칸반 보드 연동 성공 - Sync Status: success")
@@ -250,4 +302,4 @@ async def analyze_receipt_api(file: UploadFile = File(...)):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main.py:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
