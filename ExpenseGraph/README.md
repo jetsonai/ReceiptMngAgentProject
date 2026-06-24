@@ -74,6 +74,17 @@ $env:AWS_MYSQL_DATABASE="db"
     tel: str                 # 상점 전화번호 (TELL) 
     reg_date: str            # 🌟 신규 추가: 등록일시 (REG_DATE) 
     
+
+### 카테고리 분류 RAG 생성
+```sh
+# rag db 생성ㄷ
+cd C:\gitwork\ReceiptMngAgentProject\backend
+python -m app.services.rag_build --build
+
+# rag 테스트
+python -m app.services.rag_build --query "서울역 주차장 주차비 5000"
+```
+
 ### BackEnd 실행 방법
 
 ```powershell
