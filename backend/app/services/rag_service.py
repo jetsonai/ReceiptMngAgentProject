@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import re
 import zipfile
@@ -17,6 +18,7 @@ POLICY_DOCX_FILENAME = "외근비 및 출장비 지급 내규.docx"
 VECTOR_STORE_PATH = APP_ROOT / "vector_store" / "chroma"
 COLLECTION_NAME = "travel_expense_policy"
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
+JUDGE_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
 # RAG 원문 문서는 최종적으로 app/rag_docs 아래에 두는 것을 우선한다.
 # 아직 프로젝트 구조를 단계별로 만드는 중이라 현재 루트 경로도 임시 fallback으로 지원한다.
@@ -27,6 +29,17 @@ POLICY_DOCX_PATHS = [
 POLICY_DOCX_PATH = next((path for path in POLICY_DOCX_PATHS if path.exists()), POLICY_DOCX_PATHS[0])
 
 POLICY_CATEGORIES = [
+    "식비",
+    "교통",
+    "숙박",
+    "일비",
+    "항공",
+    "배송비",
+    "회의비",
+    "기타",
+]
+
+POLICY_DETAIL_CATEGORIES = [
     "외근 식비",
     "외근 일비",
     "국내 교통비",
@@ -41,6 +54,22 @@ POLICY_CATEGORIES = [
     "지급 제외",
     "기타",
 ]
+
+BROAD_CATEGORY_MAP = {
+    "외근 식비": "식비",
+    "국내 출장 식비/일비": "식비",
+    "해외 출장 식비/일비": "식비",
+    "외근 일비": "일비",
+    "국내 교통비": "교통",
+    "해외 현지 교통비": "교통",
+    "국내 숙박비": "숙박",
+    "해외 숙박비": "숙박",
+    "해외 항공비": "항공",
+    "장비 운반/배송비": "배송비",
+    "회의비/고객 응대": "회의비",
+    "지급 제외": "기타",
+    "기타": "기타",
+}
 
 CATEGORY_HINTS = {
     "외근 식비": ["제6조", "외근 식비", "일반 식당", "구내식당", "휴게소 식당", "조식", "중식", "석식"],
@@ -57,6 +86,22 @@ CATEGORY_HINTS = {
     "지급 제외": ["제18조", "지급 제외", "개인적인 식사", "간식", "음료", "주류", "유흥", "마사지", "관광", "쇼핑", "과태료", "범칙금"],
 }
 
+ITEM_CATEGORY_HINTS = {
+    "외근 식비": [
+        "백반", "정식", "국밥", "찌개", "김치찌개", "된장찌개", "비빔밥", "덮밥", "도시락",
+        "라면", "국수", "칼국수", "냉면", "분식", "김밥", "샌드위치", "햄버거", "식사",
+    ],
+    "국내 교통비": ["주차", "주차비", "택시", "버스", "지하철", "KTX", "SRT", "통행료", "유류비", "주유"],
+    "국내 숙박비": ["숙박", "호텔", "모텔", "객실", "1박"],
+    "해외 항공비": ["항공권", "항공", "비행기", "이코노미", "비즈니스석"],
+    "장비 운반/배송비": ["택배", "택배비", "퀵", "퀵서비스", "화물", "배송", "수하물", "포장재"],
+    "회의비/고객 응대": ["회의", "회의비", "고객", "응대", "미팅", "다과"],
+    "지급 제외": [
+        "아메리카노", "라떼", "커피", "음료", "간식", "케이크", "디저트", "빵", "베이커리",
+        "소주", "맥주", "와인", "주류", "담배", "쇼핑",
+    ],
+}
+
 
 @dataclass(frozen=True)
 class RetrievedPolicyChunk:
@@ -68,8 +113,13 @@ class RetrievedPolicyChunk:
 @dataclass(frozen=True)
 class CategoryClassification:
     category: str
+    policy_category: str
+    payment_status: str
     confidence: float
     reason: str
+    payment_reason: str
+    review_result: str
+    report: str
     matched_rules: list[str]
 
 
@@ -107,30 +157,71 @@ class PolicyRagService:
         store_name: str = "",
         items: Iterable[str] | None = None,
         memo: str = "",
+        per_person_amount: int = 0,
     ) -> CategoryClassification:
-        # 가맹점, 품목명, 메모, OCR 원문을 하나의 검색 문장으로 합친다.
-        # 영수증마다 정보가 들어오는 위치가 다를 수 있어 가능한 필드를 모두 사용한다.
-        query = self._build_query(receipt_text, store_name, items, memo)
+        # 벡터 검색 query는 가맹점, 메모, OCR 원문만 사용한다.
+        # 품목명(items)은 검색 후 카테고리 보정 점수에만 별도로 반영한다.
+        item_text = self._build_item_text(items)
+        query = self._build_query(receipt_text, store_name, memo)
         retrieved = self.retrieve(query, k=3)
 
         if not retrieved or retrieved[0].score <= 0:
             return CategoryClassification(
                 category="기타",
+                policy_category="기타",
+                payment_status="검토 필요",
                 confidence=0.25,
                 reason="내규 문서에서 관련 조항을 충분히 찾지 못해 기타로 분류했습니다.",
+                payment_reason="관련 내규 근거가 부족하여 담당자 확인이 필요합니다.",
+                review_result="검토 필요",
+                report=(
+                    "검토 필요: RAG 분류 결과 '기타', 지급여부 '검토 필요'입니다.\n"
+                    "분류 근거: 내규 문서에서 관련 조항을 충분히 찾지 못했습니다.\n"
+                    "지급 판단 근거: 관련 내규 근거가 부족하여 담당자 확인이 필요합니다."
+                ),
                 matched_rules=[],
             )
 
         # 검색 단계는 관련 조항을 찾고, 카테고리 선택 단계는 그 조항을 정산 항목으로 변환한다.
-        category, category_score = self._select_category(query, retrieved)
+        policy_category, category_score = self._select_policy_category(query, retrieved, item_text)
+        category = self._to_broad_category(policy_category)
+        payment_status, payment_reason = self._judge_payment_status(
+            policy_category=policy_category,
+            query=query,
+            item_text=item_text,
+            chunks=retrieved,
+            per_person_amount=per_person_amount,
+        )
         confidence = min(0.95, 0.45 + (retrieved[0].score * 0.06) + (category_score * 0.04))
         evidence_titles = ", ".join(chunk.title for chunk in retrieved[:2])
+        reason = (
+            f"내규의 {evidence_titles} 조항이 영수증 내용과 가장 관련 있어 "
+            f"세부 분류 '{policy_category}', 카테고리 '{category}'로 분류했습니다."
+        )
+        matched_rules = [format_policy_chunk(chunk) for chunk in retrieved]
+        review_result = self._build_review_result(payment_status)
+        report = self._build_report(
+            review_result=review_result,
+            category=category,
+            policy_category=policy_category,
+            payment_status=payment_status,
+            reason=reason,
+            payment_reason=payment_reason,
+            confidence=round(confidence, 2),
+            per_person_amount=per_person_amount,
+            matched_rules=matched_rules,
+        )
 
         return CategoryClassification(
             category=category,
+            policy_category=policy_category,
+            payment_status=payment_status,
             confidence=round(confidence, 2),
-            reason=f"내규의 {evidence_titles} 조항이 영수증 내용과 가장 관련 있어 '{category}'로 분류했습니다.",
-            matched_rules=[format_policy_chunk(chunk) for chunk in retrieved],
+            reason=reason,
+            payment_reason=payment_reason,
+            review_result=review_result,
+            report=report,
+            matched_rules=matched_rules,
         )
 
     def retrieve(self, query: str, k: int = 3) -> list[RetrievedPolicyChunk]:
@@ -255,9 +346,15 @@ class PolicyRagService:
             embeddings=embeddings,
         )
 
-    def _select_category(self, query: str, chunks: list[RetrievedPolicyChunk]) -> tuple[str, int]:
+    def _select_policy_category(
+        self,
+        query: str,
+        chunks: list[RetrievedPolicyChunk],
+        item_text: str = "",
+    ) -> tuple[str, int]:
         evidence = f"{query} " + " ".join(f"{chunk.title} {chunk.content}" for chunk in chunks)
         scored: list[tuple[str, int]] = []
+        item_text_lower = item_text.lower()
 
         for category, hints in CATEGORY_HINTS.items():
             # CATEGORY_HINTS는 "어떤 조항/키워드가 어떤 정산 카테고리를 의미하는지"를 담은 매핑표다.
@@ -267,6 +364,12 @@ class PolicyRagService:
                 normalized_hint = hint.lower()
                 if normalized_hint in evidence.lower():
                     score += 2 if normalized_hint.startswith("제") else 1
+
+            # 품목명은 실제 결제 성격을 가장 직접적으로 보여주므로 더 높은 가중치로 반영한다.
+            for item_hint in ITEM_CATEGORY_HINTS.get(category, []):
+                if item_hint.lower() in item_text_lower:
+                    score += 5
+
             scored.append((category, score))
 
         category, score = max(scored, key=lambda row: row[1])
@@ -274,15 +377,232 @@ class PolicyRagService:
             return "기타", 0
         return category, score
 
+    def _judge_payment_status(
+        self,
+        policy_category: str,
+        query: str,
+        item_text: str,
+        chunks: list[RetrievedPolicyChunk],
+        per_person_amount: int = 0,
+    ) -> tuple[str, str]:
+        llm_result = self._judge_payment_status_with_llm(
+            policy_category=policy_category,
+            query=query,
+            item_text=item_text,
+            chunks=chunks,
+            per_person_amount=per_person_amount,
+        )
+        if llm_result is not None:
+            payment_status, payment_reason = llm_result
+        else:
+            payment_status, payment_reason = self._judge_payment_status_by_rules(
+                policy_category=policy_category,
+                query=query,
+                chunks=chunks,
+                per_person_amount=per_person_amount,
+            )
+
+        return self._apply_safety_payment_rules(
+            policy_category=policy_category,
+            query=query,
+            item_text=item_text,
+            per_person_amount=per_person_amount,
+            payment_status=payment_status,
+            payment_reason=payment_reason,
+        )
+
+    def _judge_payment_status_with_llm(
+        self,
+        *,
+        policy_category: str,
+        query: str,
+        item_text: str,
+        chunks: list[RetrievedPolicyChunk],
+        per_person_amount: int,
+    ) -> tuple[str, str] | None:
+        if not item_text.strip():
+            return None
+
+        try:
+            from langchain_core.messages import HumanMessage
+            from langchain_openai import ChatOpenAI
+        except ImportError:
+            return None
+
+        policy_context = "\n".join(format_policy_chunk(chunk, max_length=500) for chunk in chunks)
+        prompt = f"""
+너는 회사 외근비 및 출장비 정산 심사 담당자다.
+영수증 품목(items)을 가장 중요하게 보고, RAG로 검색된 내규 조항을 근거로 지급여부를 판단하라.
+
+[영수증 품목]
+{item_text}
+
+[검색 query]
+{query}
+
+[RAG 세부 분류 후보]
+{policy_category}
+
+[1인당 금액]
+{per_person_amount}원
+
+[RAG 검색 내규]
+{policy_context}
+
+반드시 아래 JSON 하나만 반환하라.
+payment_status는 "지급 가능", "지급 제외", "검토 필요" 중 하나만 사용한다.
+{{
+  "payment_status": "지급 가능|지급 제외|검토 필요",
+  "payment_reason": "items와 내규 조항을 근거로 한 판단 이유"
+}}
+"""
+        try:
+            llm = ChatOpenAI(
+                model=JUDGE_MODEL,
+                temperature=0.0,
+                model_kwargs={"response_format": {"type": "json_object"}},
+            )
+            response = llm.invoke([HumanMessage(content=prompt)])
+            data = json.loads(response.content)
+        except Exception:
+            return None
+
+        payment_status = str(data.get("payment_status", "")).strip()
+        payment_reason = str(data.get("payment_reason", "")).strip()
+        if payment_status not in {"지급 가능", "지급 제외", "검토 필요"}:
+            return None
+        if not payment_reason:
+            payment_reason = "LLM이 items와 내규 조항을 기준으로 지급여부를 판단했습니다."
+        return payment_status, payment_reason
+
+    @staticmethod
+    def _judge_payment_status_by_rules(
+        policy_category: str,
+        query: str,
+        chunks: list[RetrievedPolicyChunk],
+        per_person_amount: int = 0,
+    ) -> tuple[str, str]:
+        evidence = f"{query} " + " ".join(f"{chunk.title} {chunk.content}" for chunk in chunks)
+
+        if policy_category == "지급 제외":
+            return "지급 제외", "내규의 지급 제외 항목과 직접 관련된 지출로 판단했습니다."
+
+        if "식비" in policy_category and per_person_amount > 20000:
+            return "지급 제외", "식비 1인당 금액이 내규상 석식 기준 한도 20,000원을 초과했습니다."
+
+        excluded_keywords = [
+            "개인",
+            "사적",
+            "주류",
+            "유흥",
+            "마사지",
+            "관광",
+            "쇼핑",
+            "과태료",
+            "범칙금",
+            "증빙이 없는",
+        ]
+        if any(keyword in query for keyword in excluded_keywords):
+            return "지급 제외", "영수증 내용에 지급 제외 가능성이 높은 개인/사적 지출 키워드가 포함되어 있습니다."
+
+        approval_keywords = [
+            "사전 승인",
+            "비즈니스석",
+            "특실",
+            "렌터카",
+            "숙박비 한도 초과",
+            "100,000원을 초과하는 회의비",
+            "고가 장비",
+        ]
+        if any(keyword in evidence for keyword in approval_keywords):
+            return "검토 필요", "내규상 사전 승인 또는 추가 확인이 필요한 항목과 관련되어 있습니다."
+
+        if policy_category == "기타":
+            return "검토 필요", "명확한 정산 카테고리로 분류되지 않아 담당자 검토가 필요합니다."
+
+        return "지급 가능", "검색된 내규 기준상 지급 가능한 정산 항목으로 판단했습니다."
+
+    @staticmethod
+    def _apply_safety_payment_rules(
+        *,
+        policy_category: str,
+        query: str,
+        item_text: str,
+        per_person_amount: int,
+        payment_status: str,
+        payment_reason: str,
+    ) -> tuple[str, str]:
+        combined_text = f"{query} {item_text}"
+
+        if policy_category == "지급 제외":
+            return "지급 제외", "내규의 지급 제외 항목과 직접 관련된 지출로 판단했습니다."
+
+        if "식비" in policy_category and per_person_amount > 20000:
+            return "지급 제외", "식비 1인당 금액이 내규상 석식 기준 한도 20,000원을 초과했습니다."
+
+        excluded_keywords = [
+            "개인",
+            "사적",
+            "주류",
+            "유흥",
+            "마사지",
+            "관광",
+            "쇼핑",
+            "과태료",
+            "범칙금",
+            "증빙이 없는",
+        ]
+        if any(keyword in combined_text for keyword in excluded_keywords):
+            return "지급 제외", "영수증 품목 또는 원문에 지급 제외 가능성이 높은 키워드가 포함되어 있습니다."
+
+        return payment_status, payment_reason
+
+    @staticmethod
+    def _build_review_result(payment_status: str) -> str:
+        if payment_status == "지급 제외":
+            return "위반"
+        if payment_status == "검토 필요":
+            return "검토 필요"
+        return "준수"
+
+    @staticmethod
+    def _build_report(
+        *,
+        review_result: str,
+        category: str,
+        policy_category: str,
+        payment_status: str,
+        reason: str,
+        payment_reason: str,
+        confidence: float,
+        per_person_amount: int,
+        matched_rules: list[str],
+    ) -> str:
+        matched_rules_text = "\n".join(f"- {rule}" for rule in matched_rules)
+        return (
+            f"{review_result}: RAG 분류 결과 '{category}', 세부 분류 '{policy_category}', 지급여부 '{payment_status}'입니다.\n"
+            f"분류 근거: {reason}\n"
+            f"지급 판단 근거: {payment_reason}\n"
+            f"신뢰도: {confidence}\n"
+            f"1인당 금액: {per_person_amount:,}원\n"
+            f"참조 조항:\n{matched_rules_text}"
+        )
+
+    @staticmethod
+    def _to_broad_category(policy_category: str) -> str:
+        return BROAD_CATEGORY_MAP.get(policy_category, "기타")
+
     @staticmethod
     def _build_query(
         receipt_text: str,
         store_name: str,
-        items: Iterable[str] | None,
         memo: str,
     ) -> str:
-        item_text = " ".join(str(item) for item in (items or []))
-        return f"{store_name} {item_text} {memo} {receipt_text}".strip()
+        return f"{store_name} {memo} {receipt_text}".strip()
+
+    @staticmethod
+    def _build_item_text(items: Iterable[str] | None) -> str:
+        return " ".join(str(item) for item in (items or []))
 
 
 def classify_category(
@@ -292,12 +612,14 @@ def classify_category(
     items: Iterable[str] | None = None,
     memo: str = "",
     use_chroma: bool = True,
+    per_person_amount: int = 0,
 ) -> CategoryClassification:
     return PolicyRagService(use_chroma=use_chroma).classify(
         receipt_text=receipt_text,
         store_name=store_name,
         items=items,
         memo=memo,
+        per_person_amount=per_person_amount,
     )
 
 

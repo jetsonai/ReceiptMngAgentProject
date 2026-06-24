@@ -37,6 +37,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
+
 # ==========================================
 # LangGraph 상태 및 아키텍처 정의
 # ==========================================
@@ -63,7 +68,10 @@ class ReceiptAgentState(TypedDict):
     rag_violation_report: str 
     category_confidence: float
     category_reason: str
+    policy_category: str
     category_matched_rules: List[str]
+    payment_status: str
+    payment_reason: str
 
 POLICY_RAG_SERVICE: PolicyRagService | None = None
 
@@ -171,36 +179,30 @@ def policy_rag_node(state: ReceiptAgentState):
             store_name=state.get("merchant", ""),
             items=item_names,
             memo=state.get("memo", ""),
+            per_person_amount=state.get("per_person_amount", 0),
         )
+        print(f"[RAG 분류 결과] 카테고리: {result.category}, 신뢰도: {result.confidence}, 지급여부: {result.payment_status}")
     except Exception as e:
         return {
             "category": state.get("category", "기타"),
             "category_confidence": 0.0,
             "category_reason": "RAG 카테고리 분류에 실패했습니다.",
+            "policy_category": "기타",
             "category_matched_rules": [],
+            "payment_status": "검토 필요",
+            "payment_reason": "RAG 분류 실패로 지급여부를 자동 판단하지 못했습니다.",
             "rag_violation_report": f"RAG 분류 실패: {e}",
         }
-
-    is_violation = result.category == "지급 제외"
-    if "식비" in result.category and state.get("per_person_amount", 0) > 20000:
-        is_violation = True
-
-    verdict = "위반" if is_violation else "준수"
-    matched_rules_text = "\n".join(f"- {rule}" for rule in result.matched_rules)
-    report = (
-        f"{verdict}: RAG 분류 결과 '{result.category}'입니다.\n"
-        f"분류 근거: {result.reason}\n"
-        f"신뢰도: {result.confidence}\n"
-        f"1인당 금액: {state.get('per_person_amount', 0):,}원\n"
-        f"참조 조항:\n{matched_rules_text}"
-    )
 
     return {
         "category": result.category,
         "category_confidence": result.confidence,
         "category_reason": result.reason,
+        "policy_category": result.policy_category,
         "category_matched_rules": result.matched_rules,
-        "rag_violation_report": report,
+        "payment_status": result.payment_status,
+        "payment_reason": result.payment_reason,
+        "rag_violation_report": result.report,
     }
 
 def evaluate_budget_node(state: ReceiptAgentState):
@@ -324,4 +326,4 @@ async def analyze_receipt_api(file: UploadFile = File(...)):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app.main.py:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
