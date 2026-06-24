@@ -50,6 +50,9 @@ pip install torch torchvision torchaudio --index-url [https://download.pytorch.o
 ### BackEnd 실행 방법
 
 ```python
+# rag 벡터테이블(chroma db 생성)
+python -m app.services.rag_build --build
+
 # 가상환경 상에서 실행
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
