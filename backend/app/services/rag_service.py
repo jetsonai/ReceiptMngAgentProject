@@ -285,7 +285,7 @@ class PolicyRagService:
                 return client.get_collection(COLLECTION_NAME)
             except Exception as exc:
                 raise RuntimeError(
-                    "ChromaDB collection이 아직 없습니다. 먼저 'python main.py --build'로 인덱스를 생성하세요."
+                    "ChromaDB collection이 아직 없습니다. 먼저 backend 폴더에서 'python -m app.services.rag_build --build'로 인덱스를 생성하세요."
                 ) from exc
 
         fingerprint = build_policy_fingerprint(self.policy_path, self.chunks)
