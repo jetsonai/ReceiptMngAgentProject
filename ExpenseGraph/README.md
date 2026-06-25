@@ -93,6 +93,11 @@ python -m app.services.rag_build --query "서울역 주차장 주차비 5000"
 cd ..\backend
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
+#### Swagger 확인 (웹)
+
+```python
+http://localhost:8000/docs
+```python
 
 ### FrontEnd 실행 방법
 
