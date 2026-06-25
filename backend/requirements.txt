@@ -1,3 +1,4 @@
+altair
 chromadb
 langchain-openai
 pandas

@@ -5,6 +5,7 @@ from datetime import date, datetime, timedelta
 from io import StringIO
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+import altair as alt
 import pandas as pd
 import streamlit as st
 
@@ -163,38 +164,38 @@ def _build_expense_query(
     return sql, params
 
 
-def _build_monthly_query(
+def _build_category_query(
     conn: Any,
     columns: set[str],
     keyword: str,
-    category: str,
+    _category: str,
     start: Optional[date],
     end: Optional[date],
     min_amount: Optional[int],
     max_amount: Optional[int],
 ) -> Tuple[str, List[Any]]:
-    where, params, date_col, _merchant_col, amount_col = _build_filter_parts(
+    where, params, _date_col, _merchant_col, amount_col = _build_filter_parts(
         conn,
         columns,
         keyword,
-        category,
+        "전체",
         start,
         end,
         min_amount,
         max_amount,
     )
-    month_expr = f"DATE_FORMAT({date_col}, '%%Y-%%m')" if _is_mysql_connection(conn) else f"strftime('%Y-%m', {date_col})"
-    where.append(f"{date_col} IS NOT NULL")
+    where.append("category IS NOT NULL")
+    where.append("category <> ''")
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
 
     sql = f"""
-        SELECT {month_expr} AS month,
+        SELECT category,
                COUNT(*) AS count,
                SUM({amount_col}) AS amount
         FROM expenses
         {where_sql}
-        GROUP BY month
-        ORDER BY month ASC
+        GROUP BY category
+        ORDER BY amount DESC
     """
     return sql, params
 
@@ -227,7 +228,7 @@ def load_dashboard_data(
             limit,
         )
         rows = [_normalize_expense(row) for row in _fetchall(conn, sql, params)]
-        monthly_sql, monthly_params = _build_monthly_query(
+        category_sql, category_params = _build_category_query(
             conn,
             columns,
             keyword,
@@ -237,7 +238,7 @@ def load_dashboard_data(
             min_amount,
             max_amount,
         )
-        monthly_rows = _fetchall(conn, monthly_sql, monthly_params)
+        category_rows = _fetchall(conn, category_sql, category_params)
 
         categories = _fetchall(
             conn,
@@ -249,7 +250,7 @@ def load_dashboard_data(
             "backend": backend,
             "columns": sorted(columns),
             "rows": rows,
-            "monthly_rows": monthly_rows,
+            "category_rows": category_rows,
             "categories": [str(row["category"]) for row in categories if row.get("category")],
             "total_count": _int_value(total_row.get("count")),
         }
@@ -312,29 +313,58 @@ def _render_filters(categories: List[str]) -> Dict[str, Any]:
     }
 
 
-def _render_monthly_charts(monthly_rows: List[Dict[str, Any]]) -> None:
-    st.subheader("월별 지출 그래프")
+def _render_category_charts(category_rows: List[Dict[str, Any]]) -> None:
+    st.subheader("카테고리별 지출 원그래프")
 
-    if not monthly_rows:
-        st.info("월별 그래프를 표시할 데이터가 없습니다.")
+    if not category_rows:
+        st.info("카테고리별 그래프를 표시할 데이터가 없습니다.")
         return
 
     chart_rows = [
         {
-            "월": str(row.get("month") or ""),
+            "카테고리": str(row.get("category") or "기타"),
             "금액": _int_value(row.get("amount")),
             "건수": _int_value(row.get("count")),
         }
-        for row in monthly_rows
-        if row.get("month")
+        for row in category_rows
+        if row.get("category")
     ]
     df = pd.DataFrame(chart_rows)
 
-    amount_tab, count_tab = st.tabs(["월별 금액", "월별 건수"])
+    amount_chart = (
+        alt.Chart(df)
+        .mark_arc(innerRadius=45, outerRadius=150)
+        .encode(
+            theta=alt.Theta("금액:Q", stack=True),
+            color=alt.Color("카테고리:N", legend=alt.Legend(title="카테고리")),
+            tooltip=[
+                alt.Tooltip("카테고리:N", title="카테고리"),
+                alt.Tooltip("금액:Q", title="금액", format=","),
+                alt.Tooltip("건수:Q", title="건수", format=","),
+            ],
+        )
+        .properties(height=360)
+    )
+    count_chart = (
+        alt.Chart(df)
+        .mark_arc(innerRadius=45, outerRadius=150)
+        .encode(
+            theta=alt.Theta("건수:Q", stack=True),
+            color=alt.Color("카테고리:N", legend=alt.Legend(title="카테고리")),
+            tooltip=[
+                alt.Tooltip("카테고리:N", title="카테고리"),
+                alt.Tooltip("건수:Q", title="건수", format=","),
+                alt.Tooltip("금액:Q", title="금액", format=","),
+            ],
+        )
+        .properties(height=360)
+    )
+
+    amount_tab, count_tab = st.tabs(["카테고리별 금액", "카테고리별 건수"])
     with amount_tab:
-        st.bar_chart(df, x="월", y="금액", use_container_width=True)
+        st.altair_chart(amount_chart, use_container_width=True)
     with count_tab:
-        st.line_chart(df, x="월", y="건수", use_container_width=True)
+        st.altair_chart(count_chart, use_container_width=True)
 
     st.dataframe(
         df,
@@ -405,7 +435,7 @@ def main() -> None:
 
     table_rows = [{key: value for key, value in row.items() if key != "_raw"} for row in rows]
 
-    _render_monthly_charts(data["monthly_rows"])
+    _render_category_charts(data["category_rows"])
 
     st.subheader("지출 목록")
     st.dataframe(
