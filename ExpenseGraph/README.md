@@ -1,4 +1,4 @@
-# 📸 지능형 영수증 분석 & 사내 내규 심사 시스템 (Receipt Agent v1.0)
+# 📸 지능형 영수증 분석 & 사내 내규 심사 시스템 (Receipt Agent v1.1)
 
 LangGraph 파이프라인과 OpenAI GPT-4o Vision 기술을 결합하여, 업로드된 영수증 이미지의 항목을 분류하고 사내 외근/출장 지출 내규(RAG) 준수 여부를 자동으로 심사하여 가계부 데이터 규격으로 정형화해주는 스마트 증빙 자동화 시스템입니다.
 
@@ -110,17 +110,47 @@ streamlit run admin_app.py
 
 ### Streamlit GUI 사용 가이드
 
-Streamlit GUI 사용 가이드
-<img width="601" height="665" alt="image" src="https://github.com/user-attachments/assets/b4581965-8c9e-4192-8ad2-c147bbecf9da" />
+```python
+# 가상환경 상에서 실행
+cd ExpenseGraph
+streamlit run app.py
+```
 
+### FrontEnd GUI 
+
+#### user GUI 
+<img width="564" height="286" alt="image" src="https://github.com/user-attachments/assets/0c3a682b-6d83-4877-918d-98490bcd2111" />
+
+#### admin GUI
+<img width="526" height="348" alt="image" src="https://github.com/user-attachments/assets/34cff3ca-e1ac-4261-b115-02eb6b53808f" />
+
+### 🌐 브라우저에서 FrontEnd 확인 및 권한 테스트 방법
+
+Streamlit이 실행되면 브라우저 창(http://localhost:8501)이 자동으로 열립니다.
+
+#### 일반 유저 페이지 (app):
+
+주소: http://localhost:8501/
+
+사이드바에 추가해 둔 "현재 접속 User ID" 입력창에 기본값(user01 등)이 들어가 있을 때, 영수증 제출 기능이 정상 작동하는지 확인합니다. 
+
+-> 하단의 "영수증 분석 GUI 사용자 가이드" 참조
+
+#### 어드민 대시보드 페이지 (admin_app):
+
+왼쪽 사이드바 메뉴에서 admin app을 클릭하거나 주소창에 http://localhost:8501/admin_app으로 이동합니다.
+
+초기 상태 (접근 제한): 현재 접속 유저가 user01이므로, 아까 추가한 "🛑 접근 권한이 없습니다." 경고 메시지와 모달 팝업이 예쁘게 뜨면서 화면이 차단되는지 확인합니다.
+
+권한 허용 상태 (대시보드 활성화): 다시 메인 화면으로 가거나 사이드바에서 User ID를 admin으로 타이핑해 수정한 뒤 어드민 페이지로 이동하면, 팝업 없이 백엔드에서 쿼리해 온 멋진 그래프와 지출 목록 대시보드가 정상적으로 렌더링되는지 확인합니다!
+
+#### 🌐 영수증 분석 GUI 사용자 가이드
 
 영수증 파일 업로드: 좌측 영역의 Browse files 버튼을 눌러 준비된 영수증 이미지(PNG, JPG, JPEG)를 업로드합니다.
 
 원본 이미지 확인: 파일이 성공적으로 수신되면 브라우저 화면 좌측에 영수증 원본 사진이 선명하게 노출됩니다.
 
 분석 가동: 이미지 아래 생성된 [🔍 영수증 자동 분석 가동] 주요 버튼을 클릭합니다.
-
-실시간 상태 관제: 우측 리포트 창에서 LangGraph의 워크플로우 통과 정보(upload_receipt ➔ ocr_process ➔ analyze_expenditure ➔ policy_rag ➔ evaluate_budget)가 실시간 프로그래시브 형태로 바인딩되는지 확인합니다.
 
 최종 결과 및 AI 리포트 확인:
 

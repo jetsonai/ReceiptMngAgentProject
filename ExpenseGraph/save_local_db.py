@@ -774,6 +774,89 @@ def main() -> None:
 		except Exception as e:
 			print(f"MySQL 저장 실패: {e}")
 
+# ADIM code by Kate 20260625
+
+def load_dashboard_data_shared(db_target: str, start_date: str = None, end_date: str = None, category: str = None) -> dict:
+    """
+    admin_app.py에서 직접 수행하던 DB 조회 및 필터링 로직을 백엔드로 이관한 공용 함수.
+    MySQL과 SQLite의 컬럼명 및 쿼리 파라미터 바인딩 차이를 자동으로 상쇄합니다.
+    """
+    import sqlite3
+    conn = get_connection(db_target)
+    
+    # 연결 객체의 모듈명으로 MySQL 여부 판단
+    is_mysql = conn.__class__.__module__.startswith("pymysql")
+    
+    # 1. DB 환경별 테이블, 컬럼명, 플레이스홀더 매핑
+    if is_mysql:
+        table_name = "expenses"
+        date_col = "spent_at"
+        merchant_col = "merchant"
+        amount_col = "amount"
+        category_col = "category"
+        param_placeholder = "%s"
+    else:
+        table_name = "expenses"
+        date_col = "purchased_at"
+        merchant_col = "store_name"
+        amount_col = "total_amount"
+        category_col = "category"
+        param_placeholder = "?"
+
+    # 2. 동적 WHERE 절 구성
+    where_clauses = []
+    params = []
+    
+    if start_date:
+        where_clauses.append(f"{date_col} >= {param_placeholder}")
+        params.append(start_date)
+    if end_date:
+        where_clauses.append(f"{date_col} <= {param_placeholder}")
+        params.append(end_date)
+    if category and category != "전체":
+        where_clauses.append(f"{category_col} = {param_placeholder}")
+        params.append(category)
+        
+    where_str = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+
+    # 코어 결과 세트 빌드를 위한 내부 헬퍼 쿼리 실행기
+    def _execute_query(sql, p):
+        if is_mysql:
+            with conn.cursor() as cursor:
+                cursor.execute(sql, tuple(p))
+                return [dict(r) for r in cursor.fetchall()]
+        else:
+            conn.row_factory = sqlite3.Row
+            return [dict(r) for r in conn.execute(sql, tuple(p)).fetchall()]
+
+    # 3. 메인 지출 목록 조회
+    sql_rows = f"""
+        SELECT id, {date_col} AS `날짜`, {merchant_col} AS `가맹점명`, 
+               {amount_col} AS `금액`, {category_col} AS `카테고리`
+        FROM {table_name} {where_str} ORDER BY id DESC
+    """
+    rows = _execute_query(sql_rows, params)
+
+    # 4. 카테고리별 합계 조회 (차트용)
+    sql_chart = f"""
+        SELECT {category_col} AS `카테고리`, SUM({amount_col}) AS `금액`
+        FROM {table_name} {where_str} GROUP BY {category_col}
+    """
+    category_rows = _execute_query(sql_chart, params)
+
+    # 5. 전체 데이터 수 조회 (Metric용)
+    sql_count = f"SELECT COUNT(*) AS total_count FROM {table_name}"
+    count_res = _execute_query(sql_count, [])
+    total_count = count_res[0]["total_count"] if count_res else 0
+
+    conn.close()
+
+    return {
+        "backend": "MySQL" if is_mysql else "SQLite",
+        "total_count": total_count,
+        "rows": rows,
+        "category_rows": category_rows
+    }
 
 if __name__ == "__main__":
 	main()

@@ -275,6 +275,15 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 notion_dir = os.path.join(current_dir, "notion")
 if notion_dir not in sys.path:
     sys.path.insert(0, notion_dir)
+
+# 현재 파일(main.py)의 상위 상위 폴더(루트)를 구한 뒤, ExpenseGraph 경로를 시스템 패스에 주입합니다.
+current_dir2 = os.path.dirname(os.path.abspath(__file__))  # backend/app
+root_dir2 = os.path.dirname(os.path.dirname(current_dir2))   # C:. (루트)
+expense_graph_path = os.path.join(root_dir2, "ExpenseGraph")
+
+if expense_graph_path not in sys.path:
+    sys.path.append(expense_graph_path)
+
     
 from notion.notion_record_agent import record_expense_to_notion
 from notion.notion_models import ExpenseRecord

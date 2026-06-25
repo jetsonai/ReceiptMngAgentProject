@@ -5,8 +5,18 @@ from PIL import Image
 
 st.set_page_config(page_title="사내 내규 심사 시스템", layout="wide")
 
+# 테스트를 위해 세션 상태에 user_id가 없으면 초기화 (기본값은 일반유저)
+if "user_id" not in st.session_state:
+    st.session_state["user_id"] = "user01"
+
 st.title("📸 지능형 영수증 분석 & 사내 내규 심사 시스템")
 st.caption("Streamlit Frontend + FastAPI Backend 멀티 티어 아키텍처 구성입니다.")
+
+# [사이드바 등 테스트용 UI] 개발 과정에서 admin 권한 토글을 쉽게 하기 위함
+with st.sidebar:
+    st.subheader("🔑 로그인 세션 테스트")
+    st.session_state["user_id"] = st.text_input("현재 접속 User ID", value=st.session_state["user_id"])
+    st.caption(f"현재 권한 상태: {st.session_state['user_id']}")
 
 # 백엔드 API 주소 정의
 BACKEND_API_URL = "http://localhost:8000/api/analyze-receipt"
