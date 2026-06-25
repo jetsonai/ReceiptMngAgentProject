@@ -103,9 +103,11 @@ streamlit run app.py
 
 ### FrontEnd GUI 
 
-Streamlit GUI 사용 가이드
-<img width="601" height="665" alt="image" src="https://github.com/user-attachments/assets/b4581965-8c9e-4192-8ad2-c147bbecf9da" />
+#### user GUI 
+<img width="564" height="286" alt="image" src="https://github.com/user-attachments/assets/0c3a682b-6d83-4877-918d-98490bcd2111" />
 
+#### admin GUI
+<img width="526" height="348" alt="image" src="https://github.com/user-attachments/assets/34cff3ca-e1ac-4261-b115-02eb6b53808f" />
 
 ### 🌐 브라우저에서 FrontEnd 확인 및 권한 테스트 방법
 
