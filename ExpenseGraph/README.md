@@ -97,7 +97,7 @@ python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 ```python
 http://localhost:8000/docs
-```python
+```
 
 ### FrontEnd 실행 방법
 
