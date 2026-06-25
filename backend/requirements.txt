@@ -1,6 +1,10 @@
 altair
 chromadb
 langchain-openai
+langgraph
+fastapi
+uvicorn
+httpx
 pandas
 python-dotenv
 pymysql

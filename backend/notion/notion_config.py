@@ -2,8 +2,13 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 from dataclasses import dataclass
+from pathlib import Path
 from urllib.parse import urlparse
+
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from notion.env_loader import load_project_env
 from notion.notion_constants import (

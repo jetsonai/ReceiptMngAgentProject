@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from notion.notion_config import load_runtime_config
 from notion.notion_constants import (
     PROPERTY_ADDRESS,
@@ -15,7 +21,6 @@ from notion.notion_constants import (
     PROPERTY_SOURCE,
     PROPERTY_SPENT_AT,
     PROPERTY_PHONE,
-    PROPERTY_OCR_TEXT,
 )
 from notion.notion_models import NotionGraphState
 from notion.notion_text import build_notion_body, build_title
@@ -41,10 +46,9 @@ def build_notion_payload(state: NotionGraphState) -> NotionGraphState:
             PROPERTY_ADDRESS: {"rich_text": [{"text": {"content": record.addr}}]},
             PROPERTY_PHONE: {"rich_text": [{"text": {"content": record.tell}}]},
             PROPERTY_REG_DATE: {"rich_text": [{"text": {"content": record.reg_date.isoformat()}}]},
-            PROPERTY_OCR_TEXT: {
+            PROPERTY_OCR_SUMMARY: {
                 "rich_text": [{"text": {"content": f"{record.category} / {record.amount:,.0f}원 / {record.merchant or '미기재'} / {record.memo or '메모 없음'}"}}]
             },
-            PROPERTY_OCR_SUMMARY: {"rich_text": [{"text": {"content": record.memo or '메모 없음'}}]},
         },
         "children": [
             {

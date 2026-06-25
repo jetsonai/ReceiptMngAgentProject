@@ -1,5 +1,11 @@
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from notion.notion_config import load_runtime_config
 from notion.notion_models import ExpenseRecord
 
@@ -34,16 +40,20 @@ def polish_body_with_llm(record: ExpenseRecord, fallback_body: str) -> str:
         ]
     )
     llm = ChatOpenAI(model=config.openai_model, temperature=0.2)
-    response = (prompt | llm).invoke(
-        {
-            "category": record.category,
-            "amount": f"{record.amount:,.0f}원",
-            "payment_method": record.payment_method,
-            "merchant": record.merchant or "미기재",
-            "memo": record.memo or "없음",
-            "budget_status": record.budget_status or "미평가",
-        }
-    )
+    try:
+        response = (prompt | llm).invoke(
+            {
+                "category": record.category,
+                "amount": f"{record.amount:,.0f}원",
+                "payment_method": record.payment_method,
+                "merchant": record.merchant or "미기재",
+                "memo": record.memo or "없음",
+                "budget_status": record.budget_status or "미평가",
+            }
+        )
+    except Exception:
+        return fallback_body
+
     content = getattr(response, "content", "")
     return content.strip() if isinstance(content, str) and content.strip() else fallback_body
 

@@ -1,8 +1,13 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import sys
+from pathlib import Path
 
 import httpx
+
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from notion.notion_config import load_runtime_config
 from notion.notion_constants import PROPERTY_NOTION_SYNC_STATUS, STATUS_SUCCESS
@@ -52,8 +57,17 @@ def write_to_notion(state: NotionGraphState) -> NotionGraphState:
         "Notion-Version": config.notion_version,
     }
 
-    with httpx.Client(timeout=30) as client:
-        response = client.post("https://api.notion.com/v1/pages", json=payload, headers=headers)
+    try:
+        with httpx.Client(timeout=30) as client:
+            response = client.post("https://api.notion.com/v1/pages", json=payload, headers=headers)
+    except Exception as exc:
+        result = NotionWriteResult(
+            ok=False,
+            title=title,
+            message=f"Notion 페이지 생성 요청 오류: {exc}",
+            payload=payload,
+        )
+        return {**state, "result": result}
 
     result = parse_notion_response(response, title, payload)
     return {**state, "result": result}
