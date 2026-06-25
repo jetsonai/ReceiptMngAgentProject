@@ -47,7 +47,8 @@ async def health_check():
 # ==========================================
 class ReceiptAgentState(TypedDict):
     messages: Annotated[list, add_messages]
-    id: str                  
+    id: str         
+    user_id: str          #user_id 추가 Kate 20260625
     spent_at: str            
     merchant: str            
     amount: int              
@@ -226,7 +227,8 @@ def save_db_node(state: ReceiptAgentState):
         return {"saved_local_db": False, "db_error": str(e)}
 
     expense_data = {
-        "user_id": state.get("id", "api_user"),
+        #"user_id": state.get("id", "api_user"), 
+        "user_id": state.get("user_id", "unknown-user"), #user_id 추가 Kate 20260625
         "spent_at": state.get("spent_at"),
         "merchant": state.get("merchant"),
         "amount": state.get("amount", 0),
@@ -262,9 +264,59 @@ def save_db_node(state: ReceiptAgentState):
 
     return {"db_save_result": save_result}
 
+#############################################
+#  record_notion_node 연동 시작 Kate 20260625
+#############################################
+import sys
+import os
+
+# 현재 실행 위치를 기준으로 'notion' 폴더의 절대 경로를 계산하여 탐색 경로 맨 앞에 추가합니다.
+current_dir = os.path.dirname(os.path.abspath(__file__))
+notion_dir = os.path.join(current_dir, "notion")
+if notion_dir not in sys.path:
+    sys.path.insert(0, notion_dir)
+    
+from notion.notion_record_agent import record_expense_to_notion
+from notion.notion_models import ExpenseRecord
+
 def record_notion_node(state: ReceiptAgentState):
-    print(f"[Notion API 로그] 칸반 보드 연동 성공 - Sync Status: success")
-    return {"notion_sync_status": "success"}
+    print(f"[Notion API 로그] 칸반 보드 연동")
+    
+    # 2. ReceiptAgentState 데이터를 ExpenseRecord 규격에 맞게 매핑
+    # 'state.get'을 활용해 값이 없을 경우 기본값을 안전하게 처리합니다.
+    expense_record = ExpenseRecord(
+        id=state.get("id", "EXP-UNKNOWN"),
+        user_id=state.get("user_id", "unknown-user"),  # 수정: 하드코딩된 "demo-user" 대신 상태의 user_id 매핑
+        amount=state.get("amount", 0),
+        category=state.get("category", "미분류"),
+        payment_method=state.get("payment_method", "미지정"),
+        merchant=state.get("merchant", "알 수 없음"),
+        memo=state.get("memo", ""),
+        source="image_upload",                       
+        budget_status=state.get("budget_status", "평가 보류"),
+        notion_sync_status="pending",
+        addr=state.get("addr", "정보 없음"),
+        tell=state.get("tell", "정보 없음")
+    )
+    
+    try:
+        # 3. 아까 성공했던 노션 기록 에이전트 인터페이스 호출
+        result = record_expense_to_notion(expense_record)
+        
+        if result.ok:
+            print(f"� 노션 기록 성공! Page URL: {result.page_url}")
+            return {"notion_sync_status": "success"}
+        else:
+            print(f"❌ 노션 기록 실패(Dry-run 또는 에러): {result.message}")
+            return {"notion_sync_status": "failed"}
+            
+    except Exception as e:
+        print(f"� 노션 연동 노드 에러 발생: {str(e)}")
+        return {"notion_sync_status": "failed"}
+
+#############################################
+#  record_notion_node 연동 끝 Kate 20260625
+#############################################
 
 def route_after_budget(state: ReceiptAgentState) -> Literal["to_notion", "to_end"]:
     return "to_notion"
@@ -323,6 +375,36 @@ async def analyze_receipt_api(file: UploadFile = File(...)):
         return {"status": "success", "data": final_values}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+# ADIM code by Kate 20260625
+
+from pydantic import BaseModel
+from typing import Optional
+
+# 1. 프론트엔드 요청 데이터 검증을 위한 Pydantic 모델
+class AdminDashboardRequest(BaseModel):
+    db_target: str
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    category: Optional[str] = None
+
+# 2. 어드민 대시보드 데이터 조회 엔드포인트 신설
+@app.post("/api/admin/dashboard")
+async def get_admin_dashboard_data(payload: AdminDashboardRequest):
+    try:
+        # save_local_db에 추가한 공용 함수 호출
+        from save_local_db import load_dashboard_data_shared
+        
+        result_data = load_dashboard_data_shared(
+            db_target=payload.db_target,
+            start_date=payload.start_date,
+            end_date=payload.end_date,
+            category=payload.category
+        )
+        return {"status": "success", "data": result_data}
+    except Exception as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=f"백엔드 대시보드 쿼리 실패: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
