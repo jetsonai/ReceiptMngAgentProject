@@ -126,6 +126,9 @@ streamlit run app.py
 #### user GUI 
 <img width="564" height="286" alt="image" src="https://github.com/user-attachments/assets/0c3a682b-6d83-4877-918d-98490bcd2111" />
 
+<img width="665" height="407" alt="image" src="https://github.com/user-attachments/assets/e34166a5-3bc3-427c-ba6c-b19716fa4658" />
+
+
 #### admin GUI
 <img width="526" height="348" alt="image" src="https://github.com/user-attachments/assets/34cff3ca-e1ac-4261-b115-02eb6b53808f" />
 
