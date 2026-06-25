@@ -7,3 +7,4 @@ __pycache__/
 pytest.ini
 tests/
 app/vector_store/
+.venv/
