@@ -130,8 +130,90 @@ def ocr_process_node(state: ReceiptAgentState):
     except Exception as e:
         return {"ocr_raw_text": f"OCR 에러: {e}"}
 
-
 def analyze_expenditure_node(state: ReceiptAgentState):
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.0)
+    
+    parsing_prompt = f"""영수증 텍스트를 분석하여 규정된 JSON 구조로만 반환하세요.
+    
+    [중요 지침]
+    1. 영수증 내용(가맹점, 품목)을 바탕으로 가장 적절한 카테고리를 분류하세요.
+       - 철도, 택시, 버스, 항공, 통행료, 주차장 등 이동 관련: "교통비/출장"
+       - 일반 식당, 구내식당, 카페, 분식, 중국집 등 음식 관련: "식비/외근"
+       - 그 외 품목: "기타"
+    2. 영수증에 표기된 품목들과 총 금액을 바탕으로 실제 이용/식사를 수행한 전체 인원수(people_count)를 추론하세요.
+       (별도 품목 수량 표기가 명확하지 않다면 일반적인 1인 지출 혹은 금액 대비 인원으로 합리적 추론)
+    
+    OCR 원문: {state['ocr_raw_text']}
+    
+    JSON 양식:
+    {{
+      "spent_at": "YYYY-MM-DD", 
+      "merchant": "상점명", 
+      "addr": "주소", 
+      "tel": "전화번호", 
+      "amount": 총합금액(숫자),
+      "payment_method": "결제수단", 
+      "category": "교통비/출장" 또는 "식비/외근" 또는 "기타",
+      "inferred_people_count": 예상인원수(숫자),
+      "items": [{{ "name": "품목명", "count": 수량(숫자), "total": 금액(숫자) }}]
+    }}
+    """
+    try:
+        response = llm.invoke([HumanMessage(content=parsing_prompt)], response_format={"type": "json_object"})
+        result = json.loads(response.content)
+        total_amount = result.get("amount", 0)
+        parsed_items = result.get("items", [])
+        detected_category = result.get("category", "식비/외근")
+        
+        # 1. 인원수 추출 (LLM 추론값 우선 활용)
+        people_count = result.get("inferred_people_count", 0)
+        if people_count <= 0:
+            for item in parsed_items:
+                item_name = item.get("name", "")
+                item_count = item.get("count", 1)
+                exclude_keywords = ["음료", "콜라", "사이다", "소주", "맥주", "공기밥", "공깃밥", "사리"]
+                if not any(keyword in item_name for keyword in exclude_keywords):
+                    people_count += item_count
+                    
+        if people_count <= 0: 
+            people_count = 1
+            
+        per_person = int(total_amount / people_count)
+        
+        # 2. 금액 조건에 따른 맞춤형 메모(memo) 및 가이드 라인 생성 (RAG 오판 방지 및 상세 사유 유도)
+        if "교통" in detected_category:
+            memo_text = f"업무 이동에 따른 교통비 지출 (이용 인원: {people_count}명 / 1인당 {per_person:,}원)."
+        else:
+            # 식비 한도(외근 중식/석식 기준 15,000원) 초과 여부 체크
+            if per_person > 15000:
+                memo_text = (
+                    f"식비 지출 (총 {people_count}명 식사 / 1인당 {per_person:,}원). "
+                    f"[규정 위반 경고] 1인당 식비({per_person:,}원)가 회사 내규 제6조 외근 식비 및 제9조 국내 출장 식비 한도 기준(15,000원)을 명백히 초과하여 규격 위반 대상입니다."
+                )
+            else:
+                memo_text = (
+                    f"점심/저녁 업무 식사 지출 (총 {people_count}명 식사 / 1인당 {per_person:,}원). "
+                    f"회사 내규의 외근 식비 1인당 한도(15,000원) 내의 정상 지출입니다."
+                )
+        
+        return {
+          "spent_at": result.get("spent_at"), 
+          "merchant": result.get("merchant"),
+          "addr": result.get("addr", ""), 
+          "tel": result.get("tel", ""),
+          "reg_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+          "amount": total_amount, 
+          "payment_method": result.get("payment_method", ""),
+          "category": detected_category, 
+          "items": parsed_items,
+          "detected_people_count": people_count, 
+          "per_person_amount": per_person,
+          "memo": memo_text
+        }
+    except Exception as e:
+        return {"merchant": "파싱에러", "amount": 0, "detected_people_count": 1, "per_person_amount": 0, "memo": f"에러: {e}", "category": "기타"}
+    
+def analyze_expenditure_node0(state: ReceiptAgentState):
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.0)
     
     # f-string 내부의 모든 JSON 객체 중괄호를 {{ }}로 이스케이프 처리했습니다.
