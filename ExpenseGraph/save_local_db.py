@@ -430,6 +430,16 @@ def save_local_db(expense_data: Dict[str, Any], db_path: Optional[str] = None) -
 				per_person_amount = int(normalized_data.get("per_person_amount") or amount)
 				items_json = json.dumps(items, ensure_ascii=False)
 
+				# ------------------ [여기서부터 복사해서 삽입하세요] ------------------
+				print("\n" + "="*60)
+				print("📥 [DB INSERT 디버그] MariaDB로 유입된 실제 영수증 데이터:")
+				print(f"  - 프론트(LLM)가 넘겨준 원본 날짜 (purchased_at): {normalized_data.get('purchased_at')}")
+				print(f"  - 최종 가공되어 SQL에 들어갈 날짜 (spent_at): {spent_at}")
+				print(f"  - 가맹점명 (merchant): {merchant}")
+				print(f"  - 총 금액 (amount): {amount}")
+				print("="*60 + "\n")
+				# ------------------ [여기까지] ----------------------------------
+
 				cursor.execute(
 					"""
 					INSERT IGNORE INTO expens_user (user_id, name, create_at)
@@ -777,17 +787,11 @@ def main() -> None:
 # ADIM code by Kate 20260625
 
 def load_dashboard_data_shared(db_target: str, start_date: str = None, end_date: str = None, category: str = None) -> dict:
-    """
-    admin_app.py에서 직접 수행하던 DB 조회 및 필터링 로직을 백엔드로 이관한 공용 함수.
-    MySQL과 SQLite의 컬럼명 및 쿼리 파라미터 바인딩 차이를 자동으로 상쇄합니다.
-    """
     import sqlite3
     conn = get_connection(db_target)
     
-    # 연결 객체의 모듈명으로 MySQL 여부 판단
     is_mysql = conn.__class__.__module__.startswith("pymysql")
     
-    # 1. DB 환경별 테이블, 컬럼명, 플레이스홀더 매핑
     if is_mysql:
         table_name = "expenses"
         date_col = "spent_at"
@@ -803,23 +807,30 @@ def load_dashboard_data_shared(db_target: str, start_date: str = None, end_date:
         category_col = "category"
         param_placeholder = "?"
 
-    # 2. 동적 WHERE 절 구성
     where_clauses = []
     params = []
     
+    # [수정] MariaDB(MySQL)일 때는 DATETIME 컬럼을 DATE()로 감싸서 날짜 비교를 명확히 합니다.
     if start_date:
-        where_clauses.append(f"{date_col} >= {param_placeholder}")
+        if is_mysql:
+            where_clauses.append(f"DATE({date_col}) >= {param_placeholder}")
+        else:
+            where_clauses.append(f"{date_col} >= {param_placeholder}")
         params.append(start_date)
+        
     if end_date:
-        where_clauses.append(f"{date_col} <= {param_placeholder}")
+        if is_mysql:
+            where_clauses.append(f"DATE({date_col}) <= {param_placeholder}")
+        else:
+            where_clauses.append(f"{date_col} <= {param_placeholder}")
         params.append(end_date)
+        
     if category and category != "전체":
         where_clauses.append(f"{category_col} = {param_placeholder}")
         params.append(category)
         
     where_str = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
 
-    # 코어 결과 세트 빌드를 위한 내부 헬퍼 쿼리 실행기
     def _execute_query(sql, p):
         if is_mysql:
             with conn.cursor() as cursor:
@@ -829,25 +840,46 @@ def load_dashboard_data_shared(db_target: str, start_date: str = None, end_date:
             conn.row_factory = sqlite3.Row
             return [dict(r) for r in conn.execute(sql, tuple(p)).fetchall()]
 
-    # 3. 메인 지출 목록 조회
+    # [수정] MariaDB 조회 시 날짜 컬럼 출력을 YYYY-MM-DD 포맷으로 깔끔하게 정돈
+    if is_mysql:
+        select_date_expr = "DATE_FORMAT(" + date_col + ", '%%Y-%%m-%%d') AS `날짜`"
+    else:
+        select_date_expr = f"{date_col} AS `날짜`"
+
     sql_rows = f"""
-        SELECT id, {date_col} AS `날짜`, {merchant_col} AS `가맹점명`, 
+        SELECT id, {select_date_expr}, {merchant_col} AS `가맹점명`, 
                {amount_col} AS `금액`, {category_col} AS `카테고리`
         FROM {table_name} {where_str} ORDER BY id DESC
     """
+    
+    # ------------------ [디버깅용 프린트문 추가] ------------------
+    print("\n" + "="*50)
+    print("🔥 [DEBUG] pymysql로 들어가는 최종 SQL 구조:")
+    print(sql_rows)
+    print("🔥 [DEBUG] 매칭되는 파라미터 (params):", params)
+    print("="*50 + "\n")
+    # -----------------------------------------------------------
+	
     rows = _execute_query(sql_rows, params)
 
-    # 4. 카테고리별 합계 조회 (차트용)
+    # [주의] 여기 차트용 쿼리문도 혹시 위의 select_date_expr를 쓰거나 영향을 받지 않는지 체크
     sql_chart = f"""
         SELECT {category_col} AS `카테고리`, SUM({amount_col}) AS `금액`
         FROM {table_name} {where_str} GROUP BY {category_col}
     """
     category_rows = _execute_query(sql_chart, params)
 
-    # 5. 전체 데이터 수 조회 (Metric용)
-    sql_count = f"SELECT COUNT(*) AS total_count FROM {table_name}"
+    # [안전 장치] MariaDB count 쿼리 시 컬럼명 유실 방지를 위해 백틱(`) 명시
+    sql_count = f"SELECT COUNT(*) AS `total_count` FROM {table_name}"
     count_res = _execute_query(sql_count, [])
-    total_count = count_res[0]["total_count"] if count_res else 0
+    
+    # 딕셔너리 키 접근 안전하게 처리
+    if count_res and isinstance(count_res[0], dict):
+        total_count = count_res[0].get("total_count", 0)
+    elif count_res and isinstance(count_res[0], (list, tuple)):
+        total_count = count_res[0][0]
+    else:
+        total_count = 0
 
     conn.close()
 

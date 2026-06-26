@@ -236,7 +236,7 @@ def save_db_node(state: ReceiptAgentState):
         "category": state.get("category", "미분류"),
         "memo": state.get("memo", ""),
         "source": state.get("source", "image"),
-        "budget_status": state.get("budget_status", "정상"),
+        "budget_status": state.get("payment_status", "정상"),
         "notion_sync_status": state.get("notion_sync_status", "pending"),
         "addr": state.get("addr", ""),
         "tel": state.get("tel", ""),
@@ -302,7 +302,7 @@ def record_notion_node(state: ReceiptAgentState):
         merchant=state.get("merchant", "알 수 없음"),
         memo=state.get("memo", ""),
         source="image_upload",                       
-        budget_status=state.get("budget_status", "평가 보류"),
+        budget_status=state.get("payment_status", "평가 보류"),
         notion_sync_status="pending",
         addr=state.get("addr", "정보 없음"),
         tell=state.get("tell", "정보 없음")
