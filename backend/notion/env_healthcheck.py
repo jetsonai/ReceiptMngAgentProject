@@ -1,13 +1,8 @@
 from __future__ import annotations
 
 import os
-import sys
-from pathlib import Path
 
 import httpx
-
-if __package__ in (None, ""):
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from notion.notion_config import load_runtime_config
 from notion.env_loader import load_project_env

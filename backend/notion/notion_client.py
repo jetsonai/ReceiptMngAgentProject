@@ -1,13 +1,8 @@
 from __future__ import annotations
 
 from copy import deepcopy
-import sys
-from pathlib import Path
 
 import httpx
-
-if __package__ in (None, ""):
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from notion.notion_config import load_runtime_config
 from notion.notion_constants import PROPERTY_NOTION_SYNC_STATUS, STATUS_SUCCESS

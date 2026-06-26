@@ -1,11 +1,5 @@
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
-if __package__ in (None, ""):
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
 from notion.notion_config import load_runtime_config
 from notion.notion_models import ExpenseRecord
 
