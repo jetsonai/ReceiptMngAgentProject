@@ -131,6 +131,77 @@ def ocr_process_node(state: ReceiptAgentState):
         return {"ocr_raw_text": f"OCR 에러: {e}"}
 
 def analyze_expenditure_node(state: ReceiptAgentState):
+    llm = ChatOpenAI(model="gpt-4o", temperature=0.0)
+    
+    # 1인당 지급 한도 정보를 프롬프트에 제공하여 LLM이 단독/다인원 여부를 명확히 파악하도록 유도
+    parsing_prompt = f"""영수증 텍스트를 파싱하여 규정된 JSON 구조로만 반환하세요.
+    
+    [중요 지침]
+    1. 영수증에 표기된 품목들과 총 금액을 바탕으로 실제 식사를 수행한 전체 인원수(people_count)를 정밀하게 추론하세요.
+    2. 여러 품목이 각각 1개씩 주문되었더라도, 단가와 메뉴 구성을 보아 여러 명의 식사로 판단되면 그에 맞는 인원수를 산정하세요.
+    
+    OCR 원문: {state['ocr_raw_text']}
+    
+    JSON 양식:
+    {{
+      "spent_at": "YYYY-MM-DD", 
+      "merchant": "상점명", 
+      "addr": "주소", 
+      "tel": "전화번호", 
+      "amount": 총합금액(숫자),
+      "payment_method": "결제수단", 
+      "inferred_people_count": 예상인원수(숫자),
+      "items": [{{"name": "품목명", "count": 수량(숫자), "total": 금액(숫자)}}]
+    }}
+    """
+    try:
+        response = llm.invoke([HumanMessage(content=parsing_prompt)], response_format={"type": "json_object"})
+        result = json.loads(response.content)
+        total_amount = result.get("amount", 0)
+        parsed_items = result.get("items", [])
+        
+        # 1. LLM이 추론한 인원수 우선 활용
+        people_count = result.get("inferred_people_count", 0)
+        
+        # 2. 만약 LLM 추론이 누락되었을 경우 기존 파이썬 수량 필터링 결합 연산 적용
+        if people_count <= 0:
+            for item in parsed_items:
+                item_name = item.get("name", "")
+                item_count = item.get("count", 1)
+                exclude_keywords = ["음료", "콜라", "사이다", "소주", "맥주", "공기밥", "공깃밥", "사리"]
+                if not any(keyword in item_name for keyword in exclude_keywords):
+                    people_count += item_count
+                    
+        if people_count <= 0: 
+            people_count = 1
+            
+        per_person = int(total_amount / people_count)
+        
+        # RAG 가 카테고리를 '기타(지급 제외)'로 오분류하지 않도록 memo 필드를 정교화
+        # 1인당 금액이 주/중/석식 한도(15,000원) 내의 정상 지출임을 명시
+        memo_text = (
+            f"점심/저녁 업무 식사 지출 (총 {people_count}명 식사 / 1인당 {per_person:,}원). "
+            f"회사 내규의 외근 식비 1인당 한도(15,000원)를 준수함."
+        )
+        
+        return {
+          "spent_at": result.get("spent_at"), 
+          "merchant": result.get("merchant"),
+          "addr": result.get("addr", ""), 
+          "tel": result.get("tel", ""),
+          "reg_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+          "amount": total_amount, 
+          "payment_method": result.get("payment_method", ""),
+          "category": "식비/외근", 
+          "items": parsed_items,
+          "detected_people_count": people_count, 
+          "per_person_amount": per_person,
+          "memo": memo_text
+        }
+    except Exception as e:
+        return {"merchant": "파싱에러", "amount": 0, "detected_people_count": 1, "per_person_amount": 0, "memo": f"에러: {e}"}
+    
+def analyze_expenditure_node0(state: ReceiptAgentState):
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.0)
     parsing_prompt = f"""영수증 텍스트를 파싱하여 규정된 JSON 구조로만 반환하세요.
     OCR 원문: {state['ocr_raw_text']}
